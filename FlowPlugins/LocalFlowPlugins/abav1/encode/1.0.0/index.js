@@ -49,7 +49,7 @@ var details = function () { return ({
     isStartPlugin: false,
     pType: '',
     requiresVersion: '2.31.02',
-    sidebarPosition: -1,
+    sidebarPosition: 2,
     icon: 'faVideoCamera',
     inputs: [
         {

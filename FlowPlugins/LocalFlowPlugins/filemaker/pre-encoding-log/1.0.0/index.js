@@ -52,101 +52,45 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.plugin = exports.details = void 0;
 var https_1 = __importDefault(require("https"));
-var fileUtils_1 = require("../../../../FlowHelpers/1.0.0/fileUtils");
 // Create HTTPS agent that ignores SSL certificate errors
 var httpsAgent = new https_1.default.Agent({
     rejectUnauthorized: false,
 });
-var details = function () { return ({
-    name: 'FileMaker Pre-Encoding Log',
-    description: 'Logs initial encoding parameters to FileMaker database',
-    style: {
-        borderColor: 'blue',
-    },
-    tags: 'database,filemaker,logging',
-    isStartPlugin: false,
-    pType: '',
-    requiresVersion: '2.31.02',
-    sidebarPosition: -1,
-    icon: 'faDatabase',
-    inputs: [
-        {
-            label: 'FileMaker Server URL',
-            name: 'serverUrl',
-            type: 'string',
-            defaultValue: 'https://your-server.com',
-            inputUI: {
-                type: 'text',
-            },
-            tooltip: 'FileMaker Server URL',
-        },
-        {
-            label: 'Database Name',
-            name: 'database',
-            type: 'string',
-            defaultValue: '',
-            inputUI: {
-                type: 'text',
-            },
-            tooltip: 'FileMaker database name',
-        },
-        {
-            label: 'Layout',
-            name: 'layout',
-            type: 'string',
-            defaultValue: 'Transcoding',
-            inputUI: {
-                type: 'text',
-            },
-            tooltip: 'FileMaker layout name',
-        },
-        {
-            label: 'Username',
-            name: 'username',
-            type: 'string',
-            defaultValue: '',
-            inputUI: {
-                type: 'text',
-            },
-            tooltip: 'FileMaker username',
-        },
-        {
-            label: 'Password',
-            name: 'password',
-            type: 'string',
-            defaultValue: '',
-            inputUI: {
-                type: 'text',
-            },
-            tooltip: 'FileMaker password',
-        },
-    ],
-    outputs: [
-        {
-            number: 1,
-            tooltip: 'Successfully logged to FileMaker',
-        },
-        {
-            number: 2,
-            tooltip: 'Failed to log to FileMaker',
-        },
-    ],
-}); };
-exports.details = details;
-var plugin = function (args) { return __awaiter(void 0, void 0, void 0, function () {
-    var lib, inputs, serverUrl, database, layout, username, password, credentials, authResponse, token, abav1Results, createResponse, recordId, updatedVariables, err_1, error;
-    var _a;
-    return __generator(this, function (_b) {
-        switch (_b.label) {
+var makeFileMakerRequest = function (config, data, token, axios) { return __awaiter(void 0, void 0, void 0, function () {
+    return __generator(this, function (_a) {
+        switch (_a.label) {
             case 0:
-                _b.trys.push([0, 3, , 4]);
-                lib = require('../../../../../methods/lib')();
-                inputs = lib.loadDefaultValues(args.inputs, details);
-                serverUrl = inputs.serverUrl, database = inputs.database, layout = inputs.layout, username = inputs.username, password = inputs.password;
-                credentials = Buffer.from("".concat(username, ":").concat(password)).toString('base64');
-                return [4 /*yield*/, args.deps.axios({
+                if (!config.recordId) {
+                    throw new Error('No FileMaker recordId found');
+                }
+                return [4 /*yield*/, axios({
+                        method: 'patch',
+                        url: "".concat(config.serverUrl, "/fmi/data/v1/databases/").concat(config.database, "/layouts/")
+                            + "".concat(config.layout, "/records/").concat(config.recordId),
+                        headers: {
+                            'Content-Type': 'application/json',
+                            Authorization: "Bearer ".concat(token),
+                        },
+                        data: {
+                            fieldData: data,
+                        },
+                        httpsAgent: httpsAgent,
+                    })];
+            case 1:
+                _a.sent();
+                return [2 /*return*/];
+        }
+    });
+}); };
+var refreshToken = function (config, axios) { return __awaiter(void 0, void 0, void 0, function () {
+    var credentials, authResponse;
+    return __generator(this, function (_a) {
+        switch (_a.label) {
+            case 0:
+                credentials = Buffer.from("".concat(config.username, ":").concat(config.password)).toString('base64');
+                return [4 /*yield*/, axios({
                         method: 'post',
-                        url: "".concat(serverUrl, "/fmi/data/v1/databases/").concat(database, "/sessions"),
+                        url: "".concat(config.serverUrl, "/fmi/data/v1/databases/").concat(config.database, "/sessions"),
                         headers: {
                             'Content-Type': 'application/json',
                             Authorization: "Basic ".concat(credentials),
@@ -155,67 +99,123 @@ var plugin = function (args) { return __awaiter(void 0, void 0, void 0, function
                         httpsAgent: httpsAgent,
                     })];
             case 1:
-                authResponse = _b.sent();
-                token = authResponse.data.response.token;
-                abav1Results = args.variables.abav1;
-                if (!abav1Results) {
+                authResponse = _a.sent();
+                return [2 /*return*/, authResponse.data.response.token || ''];
+        }
+    });
+}); };
+var updateRecord = function (config, data, axios, args) { return __awaiter(void 0, void 0, void 0, function () {
+    var error_1, typedError, newToken;
+    var _a;
+    return __generator(this, function (_b) {
+        switch (_b.label) {
+            case 0:
+                _b.trys.push([0, 2, , 6]);
+                if (!config.token) {
+                    throw new Error('No FileMaker token found');
+                }
+                args.jobLog('Using existing FileMaker token');
+                return [4 /*yield*/, makeFileMakerRequest(config, data, config.token, axios)];
+            case 1:
+                _b.sent();
+                return [2 /*return*/, { token: config.token }];
+            case 2:
+                error_1 = _b.sent();
+                typedError = error_1;
+                if (!(((_a = typedError.response) === null || _a === void 0 ? void 0 : _a.status) === 401)) return [3 /*break*/, 5];
+                // Get new token and retry
+                args.jobLog('Token expired, requesting new token');
+                return [4 /*yield*/, refreshToken(config, axios)];
+            case 3:
+                newToken = _b.sent();
+                args.jobLog('Using new FileMaker token');
+                return [4 /*yield*/, makeFileMakerRequest(config, data, newToken, axios)];
+            case 4:
+                _b.sent();
+                return [2 /*return*/, { token: newToken }];
+            case 5: throw error_1;
+            case 6: return [2 /*return*/];
+        }
+    });
+}); };
+var details = function () { return ({
+    name: 'FileMaker Pre-Encoding Log',
+    description: 'Updates FileMaker record with pre-encoding analysis results',
+    style: {
+        borderColor: 'blue',
+    },
+    tags: 'database,filemaker,logging',
+    isStartPlugin: false,
+    pType: '',
+    requiresVersion: '2.31.02',
+    sidebarPosition: 2,
+    icon: 'faDatabase',
+    inputs: [], // No inputs needed as we use stored connection details
+    outputs: [
+        {
+            number: 1,
+            tooltip: 'Successfully updated FileMaker record',
+        },
+        {
+            number: 2,
+            tooltip: 'Failed to update FileMaker record',
+        },
+    ],
+}); };
+exports.details = details;
+var plugin = function (args) { return __awaiter(void 0, void 0, void 0, function () {
+    var variables, result, updatedConfig, updatedVariables, err_1, error, errorVariables;
+    var _a;
+    return __generator(this, function (_b) {
+        switch (_b.label) {
+            case 0:
+                _b.trys.push([0, 2, , 3]);
+                variables = args.variables;
+                // Check for required data
+                if (!variables.fileMaker) {
+                    throw new Error('No FileMaker configuration found. Please run initialization plugin first.');
+                }
+                if (!variables.abav1) {
                     throw new Error('No AB-AV1 results found. Please run CRF search plugin first.');
                 }
-                return [4 /*yield*/, args.deps.axios({
-                        method: 'post',
-                        url: "".concat(serverUrl, "/fmi/data/v1/databases/").concat(database, "/layouts/").concat(layout, "/records"),
-                        headers: {
-                            'Content-Type': 'application/json',
-                            Authorization: "Bearer ".concat(token),
-                        },
-                        data: {
-                            fieldData: {
-                                Filename: (0, fileUtils_1.getFileName)(args.inputFileObj._id),
-                                CRF: abav1Results.crf,
-                                PredictedVMAF: abav1Results.vmaf,
-                                OriginalSize: args.inputFileObj.file_size || 0,
-                                PredictedSize: abav1Results.size,
-                                StartTimestamp: new Date().toLocaleString('en-US', {
-                                    month: '2-digit',
-                                    day: '2-digit',
-                                    year: 'numeric',
-                                    hour: '2-digit',
-                                    minute: '2-digit',
-                                    second: '2-digit',
-                                    hour12: true,
-                                }).replace(',', ''),
-                                Status: 2,
-                            },
-                        },
-                        httpsAgent: httpsAgent,
-                    })];
-            case 2:
-                createResponse = _b.sent();
-                if (createResponse.status !== 200) {
-                    throw new Error("Failed to create FileMaker record: ".concat(createResponse.statusText));
-                }
-                recordId = createResponse.data.response.recordId;
-                updatedVariables = __assign(__assign({}, args.variables), { fileMakerRecordId: recordId });
-                args.jobLog('Successfully logged initial results to FileMaker');
-                args.jobLog("Stored FileMaker recordId: ".concat(recordId));
+                return [4 /*yield*/, updateRecord(variables.fileMaker, {
+                        CRF: variables.abav1.crf,
+                        PredictedVMAF: variables.abav1.vmaf,
+                        PredictedSize: variables.abav1.size,
+                        StartTimestamp: new Date().toLocaleString('en-US', {
+                            month: '2-digit',
+                            day: '2-digit',
+                            year: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                            second: '2-digit',
+                            hour12: true,
+                        }).replace(',', ''),
+                    }, args.deps.axios, args)];
+            case 1:
+                result = _b.sent();
+                args.jobLog('Successfully updated FileMaker record with pre-encoding results');
+                updatedConfig = __assign(__assign({}, variables.fileMaker), { token: result.token });
+                updatedVariables = __assign(__assign({}, variables), { fileMaker: updatedConfig });
                 return [2 /*return*/, {
                         outputFileObj: args.inputFileObj,
                         outputNumber: 1,
                         variables: updatedVariables,
                     }];
-            case 3:
+            case 2:
                 err_1 = _b.sent();
                 error = err_1;
-                args.jobLog("Error logging to FileMaker: ".concat(error.message));
+                args.jobLog("Error updating FileMaker record: ".concat(error.message));
                 if ((_a = error.response) === null || _a === void 0 ? void 0 : _a.data) {
                     args.jobLog("Response data: ".concat(JSON.stringify(error.response.data)));
                 }
+                errorVariables = args.variables;
                 return [2 /*return*/, {
                         outputFileObj: args.inputFileObj,
                         outputNumber: 2,
-                        variables: args.variables,
+                        variables: errorVariables,
                     }];
-            case 4: return [2 /*return*/];
+            case 3: return [2 /*return*/];
         }
     });
 }); };

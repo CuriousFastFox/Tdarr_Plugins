@@ -5,7 +5,6 @@ import {
   IpluginOutputArgs,
   Ivariables,
 } from '../../../../FlowHelpers/1.0.0/interfaces/interfaces';
-import { getFileName } from '../../../../FlowHelpers/1.0.0/fileUtils';
 
 // Create HTTPS agent that ignores SSL certificate errors
 const httpsAgent = new https.Agent({
@@ -19,8 +18,19 @@ interface ABAV1Results {
   duration: number;
 }
 
+interface FileMakerConfig {
+  serverUrl: string;
+  database: string;
+  layout: string;
+  username: string;
+  password: string;
+  token?: string;
+  recordId?: string;
+}
+
 interface ExtendedVariables extends Ivariables {
   abav1?: ABAV1Results;
+  fileMaker?: FileMakerConfig;
 }
 
 interface FileMakerErrorResponse {
@@ -37,9 +47,70 @@ interface FileMakerErrorResponse {
   message: string;
 }
 
+const makeFileMakerRequest = async (config: FileMakerConfig, data: Record<string, unknown>, token: string, axios: any): Promise<void> => {
+  if (!config.recordId) {
+    throw new Error('No FileMaker recordId found');
+  }
+
+  await axios({
+    method: 'patch',
+    url: `${config.serverUrl}/fmi/data/v1/databases/${config.database}/layouts/`
+         + `${config.layout}/records/${config.recordId}`,
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    data: {
+      fieldData: data,
+    },
+    httpsAgent,
+  });
+};
+
+const refreshToken = async (config: FileMakerConfig, axios: any): Promise<string> => {
+  const credentials = Buffer.from(`${config.username}:${config.password}`).toString('base64');
+
+  const authResponse = await axios({
+    method: 'post',
+    url: `${config.serverUrl}/fmi/data/v1/databases/${config.database}/sessions`,
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Basic ${credentials}`,
+    },
+    data: {},
+    httpsAgent,
+  });
+
+  return authResponse.data.response.token || '';
+};
+
+const updateRecord = async (config: FileMakerConfig, data: Record<string, unknown>, axios: any, args: IpluginInputArgs): Promise<{ token: string }> => {
+  try {
+    if (!config.token) {
+      throw new Error('No FileMaker token found');
+    }
+
+    args.jobLog('Using existing FileMaker token');
+    await makeFileMakerRequest(config, data, config.token, axios);
+    return { token: config.token };
+  } catch (error) {
+    const typedError = error as FileMakerErrorResponse;
+    // Check if token expired (401 status)
+    if (typedError.response?.status === 401) {
+      // Get new token and retry
+      args.jobLog('Token expired, requesting new token');
+      const newToken = await refreshToken(config, axios);
+      args.jobLog('Using new FileMaker token');
+      await makeFileMakerRequest(config, data, newToken, axios);
+      return { token: newToken };
+    }
+    throw error;
+  }
+};
+
 const details = (): IpluginDetails => ({
   name: 'FileMaker Pre-Encoding Log',
-  description: 'Logs initial encoding parameters to FileMaker database',
+  description: 'Updates FileMaker record with pre-encoding analysis results',
   style: {
     borderColor: 'blue',
   },
@@ -47,146 +118,68 @@ const details = (): IpluginDetails => ({
   isStartPlugin: false,
   pType: '',
   requiresVersion: '2.31.02',
-  sidebarPosition: -1,
+  sidebarPosition: 2,
   icon: 'faDatabase',
-  inputs: [
-    {
-      label: 'FileMaker Server URL',
-      name: 'serverUrl',
-      type: 'string',
-      defaultValue: 'https://your-server.com',
-      inputUI: {
-        type: 'text',
-      },
-      tooltip: 'FileMaker Server URL',
-    },
-    {
-      label: 'Database Name',
-      name: 'database',
-      type: 'string',
-      defaultValue: '',
-      inputUI: {
-        type: 'text',
-      },
-      tooltip: 'FileMaker database name',
-    },
-    {
-      label: 'Layout',
-      name: 'layout',
-      type: 'string',
-      defaultValue: 'Transcoding',
-      inputUI: {
-        type: 'text',
-      },
-      tooltip: 'FileMaker layout name',
-    },
-    {
-      label: 'Username',
-      name: 'username',
-      type: 'string',
-      defaultValue: '',
-      inputUI: {
-        type: 'text',
-      },
-      tooltip: 'FileMaker username',
-    },
-    {
-      label: 'Password',
-      name: 'password',
-      type: 'string',
-      defaultValue: '',
-      inputUI: {
-        type: 'text',
-      },
-      tooltip: 'FileMaker password',
-    },
-  ],
+  inputs: [], // No inputs needed as we use stored connection details
   outputs: [
     {
       number: 1,
-      tooltip: 'Successfully logged to FileMaker',
+      tooltip: 'Successfully updated FileMaker record',
     },
     {
       number: 2,
-      tooltip: 'Failed to log to FileMaker',
+      tooltip: 'Failed to update FileMaker record',
     },
   ],
 });
 
 const plugin = async (args: IpluginInputArgs): Promise<IpluginOutputArgs> => {
   try {
-    const lib = require('../../../../../methods/lib')();
-    const inputs = lib.loadDefaultValues(args.inputs, details);
-    const {
-      serverUrl, database, layout, username, password,
-    } = inputs;
+    const variables = args.variables as ExtendedVariables;
 
-    // Create base64 encoded credentials
-    const credentials = Buffer.from(`${username}:${password}`).toString('base64');
+    // Check for required data
+    if (!variables.fileMaker) {
+      throw new Error('No FileMaker configuration found. Please run initialization plugin first.');
+    }
 
-    // Get authentication token
-    const authResponse = await args.deps.axios({
-      method: 'post',
-      url: `${serverUrl}/fmi/data/v1/databases/${database}/sessions`,
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Basic ${credentials}`,
-      },
-      data: {},
-      httpsAgent,
-    });
-
-    const { token } = authResponse.data.response;
-
-    // Get data from previous plugin
-    const abav1Results = (args.variables as ExtendedVariables).abav1;
-    if (!abav1Results) {
+    if (!variables.abav1) {
       throw new Error('No AB-AV1 results found. Please run CRF search plugin first.');
     }
 
-    // Create record in FileMaker
-    const createResponse = await args.deps.axios({
-      method: 'post',
-      url: `${serverUrl}/fmi/data/v1/databases/${database}/layouts/${layout}/records`,
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
+    // Update record with pre-encoding data
+    const result = await updateRecord(
+      variables.fileMaker,
+      {
+        CRF: variables.abav1.crf,
+        PredictedVMAF: variables.abav1.vmaf,
+        PredictedSize: variables.abav1.size,
+        StartTimestamp: new Date().toLocaleString('en-US', {
+          month: '2-digit',
+          day: '2-digit',
+          year: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+          hour12: true,
+        }).replace(',', ''),
       },
-      data: {
-        fieldData: {
-          Filename: getFileName(args.inputFileObj._id),
-          CRF: abav1Results.crf,
-          PredictedVMAF: abav1Results.vmaf,
-          OriginalSize: args.inputFileObj.file_size || 0,
-          PredictedSize: abav1Results.size,
-          StartTimestamp: new Date().toLocaleString('en-US', {
-            month: '2-digit',
-            day: '2-digit',
-            year: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit',
-            second: '2-digit',
-            hour12: true,
-          }).replace(',', ''),
-          Status: 2,
-        },
-      },
-      httpsAgent,
-    });
+      args.deps.axios,
+      args,
+    );
 
-    if (createResponse.status !== 200) {
-      throw new Error(`Failed to create FileMaker record: ${createResponse.statusText}`);
-    }
+    args.jobLog('Successfully updated FileMaker record with pre-encoding results');
 
-    // Store the recordId in variables
-    const { recordId } = createResponse.data.response;
-    const updatedVariables = {
-      ...args.variables,
-      fileMakerRecordId: recordId,
+    // Create updated config with new token if refreshed
+    const updatedConfig: FileMakerConfig = {
+      ...variables.fileMaker,
+      token: result.token,
     };
 
-    args.jobLog('Successfully logged initial results to FileMaker');
-    args.jobLog(`Stored FileMaker recordId: ${recordId}`);
+    // Maintain the ExtendedVariables type when returning
+    const updatedVariables: ExtendedVariables = {
+      ...variables,
+      fileMaker: updatedConfig,
+    };
 
     return {
       outputFileObj: args.inputFileObj,
@@ -195,14 +188,18 @@ const plugin = async (args: IpluginInputArgs): Promise<IpluginOutputArgs> => {
     };
   } catch (err) {
     const error = err as FileMakerErrorResponse;
-    args.jobLog(`Error logging to FileMaker: ${error.message}`);
+    args.jobLog(`Error updating FileMaker record: ${error.message}`);
     if (error.response?.data) {
       args.jobLog(`Response data: ${JSON.stringify(error.response.data)}`);
     }
+
+    // Maintain the ExtendedVariables type in error case as well
+    const errorVariables: ExtendedVariables = args.variables as ExtendedVariables;
+
     return {
       outputFileObj: args.inputFileObj,
       outputNumber: 2,
-      variables: args.variables,
+      variables: errorVariables,
     };
   }
 };

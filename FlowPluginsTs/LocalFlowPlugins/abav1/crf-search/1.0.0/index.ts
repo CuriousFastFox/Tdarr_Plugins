@@ -28,7 +28,7 @@ const details = (): IpluginDetails => ({
   isStartPlugin: false,
   pType: '',
   requiresVersion: '2.31.02',
-  sidebarPosition: -1,
+  sidebarPosition: 1,
   icon: 'faSearch',
   inputs: [
     {
