@@ -147,7 +147,7 @@ const plugin = async (args: IpluginInputArgs): Promise<IpluginOutputArgs> => {
     }
 
     // Parse the final output line using regex
-    const regex = /crf (\d+) VMAF ([\d.]+) predicted video stream size ([\d.]+) MiB \((\d+)%\) taking (\d+) minutes/;
+    const regex = /crf (\d+) VMAF ([\d.]+) predicted video stream size ([\d.]+) MiB \((\d+)%\) taking (\d+) (minutes|seconds)/;
     const match = lastLine.match(regex);
 
     if (!match) {

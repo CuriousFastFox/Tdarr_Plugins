@@ -50,91 +50,78 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.plugin = exports.details = void 0;
 var cliUtils_1 = require("../../../../FlowHelpers/1.0.0/cliUtils");
 var details = function () { return ({
-    name: 'AB-AV1 CRF Search',
-    description: 'Runs AB-AV1 CRF search to find optimal CRF value based on VMAF target',
+    name: 'Resolution Check',
+    description: 'Checks if video resolution exceeds specified maximum width',
     style: {
-        borderColor: 'orange',
+        borderColor: 'blue',
     },
-    tags: 'video,av1,vmaf',
+    tags: 'video,resolution,ffprobe',
     isStartPlugin: false,
     pType: '',
     requiresVersion: '2.31.02',
     sidebarPosition: 1,
-    icon: 'faSearch',
+    icon: 'faRuler',
     inputs: [
         {
-            label: 'AB-AV1 Path',
-            name: 'abav1Path',
+            label: 'FFprobe Path',
+            name: 'ffprobePath',
             type: 'string',
-            defaultValue: 'C:\\tools\\ab-av1\\ab-av1.exe',
+            defaultValue: 'ffprobe',
             inputUI: {
                 type: 'text',
             },
-            tooltip: 'Full path to ab-av1 executable',
+            tooltip: 'Path to ffprobe executable',
         },
         {
-            label: 'Minimum VMAF Target',
-            name: 'minVmaf',
+            label: 'Maximum Width',
+            name: 'maxWidth',
             type: 'number',
-            defaultValue: '95', // Changed to string to match interface requirement
+            defaultValue: '1920',
             inputUI: {
                 type: 'text',
             },
-            tooltip: 'Target VMAF score (default: 95)',
-        },
-        {
-            label: 'Encoding Preset',
-            name: 'preset',
-            type: 'string',
-            defaultValue: 'medium',
-            inputUI: {
-                type: 'dropdown',
-                options: ['fast', 'medium', 'slow'],
-            },
-            tooltip: 'AV1 encoding preset',
+            tooltip: 'Maximum allowed video width in pixels',
         },
     ],
     outputs: [
         {
             number: 1,
-            tooltip: 'CRF search completed successfully',
+            tooltip: 'Video resolution is within limits',
         },
         {
             number: 2,
-            tooltip: 'CRF search failed',
+            tooltip: 'Video resolution exceeds maximum width',
         },
     ],
 }); };
 exports.details = details;
 var plugin = function (args) { return __awaiter(void 0, void 0, void 0, function () {
-    var lib, inputs, minVmaf, preset, abav1Path, cliArgs, cli, process_1, allOutput_1, lines, lastLine, i, regex, match, crf, vmaf, size, duration, newVariables, error_1;
-    return __generator(this, function (_a) {
-        switch (_a.label) {
+    var lib, inputs, maxWidth, ffprobePath, cliArgs, cli, process_1, output, _a, width, height, newVariables, outputNumber, error_1;
+    return __generator(this, function (_b) {
+        switch (_b.label) {
             case 0:
-                _a.trys.push([0, 2, , 3]);
+                _b.trys.push([0, 2, , 3]);
                 lib = require('../../../../../methods/lib')();
                 inputs = lib.loadDefaultValues(args.inputs, details);
-                minVmaf = Number(inputs.minVmaf);
-                preset = inputs.preset;
-                abav1Path = inputs.abav1Path;
+                maxWidth = Number(inputs.maxWidth);
+                ffprobePath = inputs.ffprobePath;
                 if (!args.inputFileObj._id) {
                     throw new Error('No input file provided');
                 }
-                args.jobLog('Starting AB-AV1 CRF search');
+                args.jobLog('Checking video resolution');
                 cliArgs = [
-                    'crf-search',
-                    '-i', args.inputFileObj._id,
-                    '--encoder', 'av1_nvenc',
-                    '--preset', preset,
-                    '--min-vmaf', minVmaf.toString(),
-                    '--cache', 'false',
+                    '-v', 'error',
+                    '-select_streams', 'v:0',
+                    '-show_entries', 'stream=width,height',
+                    '-of', 'csv=p=0',
+                    args.inputFileObj._id,
                 ];
                 args.updateWorker({
-                    CLIType: abav1Path,
+                    CLIType: ffprobePath,
                     preset: cliArgs.join(' '),
                 });
                 cli = new cliUtils_1.CLI({
-                    cli: abav1Path,
+                    cli: ffprobePath,
                     spawnArgs: cliArgs,
                     spawnOpts: {},
                     jobLog: args.jobLog,
@@ -146,50 +133,32 @@ var plugin = function (args) { return __awaiter(void 0, void 0, void 0, function
                 });
                 return [4 /*yield*/, cli.runCli()];
             case 1:
-                process_1 = _a.sent();
+                process_1 = _b.sent();
                 if (process_1.cliExitCode !== 0) {
-                    args.jobLog('AB-AV1 CRF search failed');
-                    throw new Error('AB-AV1 CRF search failed');
+                    args.jobLog('FFprobe resolution check failed');
+                    throw new Error('FFprobe resolution check failed');
                 }
-                allOutput_1 = '';
-                process_1.errorLogFull.forEach(function (log) {
-                    allOutput_1 += "".concat(log, "\n");
-                });
-                args.jobLog("Full output: ".concat(allOutput_1));
-                lines = allOutput_1.split('\n');
-                lastLine = '';
-                // Find the last line that matches our expected pattern
-                for (i = lines.length - 1; i >= 0; i -= 1) {
-                    if (lines[i].includes('predicted video stream size')) {
-                        lastLine = lines[i];
-                        break;
-                    }
+                output = process_1.errorLogFull.join('\n').trim();
+                _a = output.split(',').map(Number), width = _a[0], height = _a[1];
+                if (!width || !height) {
+                    throw new Error('Could not parse resolution from FFprobe output');
                 }
-                if (!lastLine) {
-                    throw new Error('Could not find CRF search result in output');
-                }
-                regex = /crf (\d+) VMAF ([\d.]+) predicted video stream size ([\d.]+) MiB \((\d+)%\) taking (\d+) (minutes|seconds)/;
-                match = lastLine.match(regex);
-                if (!match) {
-                    throw new Error("Could not parse AB-AV1 output: ".concat(lastLine));
-                }
-                crf = match[1], vmaf = match[2], size = match[3], duration = match[5];
-                newVariables = __assign(__assign({}, args.variables), { abav1: {
-                        crf: parseInt(crf, 10),
-                        vmaf: parseFloat(vmaf),
-                        size: parseFloat(size),
-                        duration: parseInt(duration, 10),
-                    }, ffmpegCommand: args.variables.ffmpegCommand, flowFailed: args.variables.flowFailed });
-                args.jobLog('AB-AV1 CRF search completed successfully');
-                args.jobLog("Results: ".concat(JSON.stringify(newVariables.abav1)));
+                newVariables = __assign(__assign({}, args.variables), { resolution: {
+                        width: width,
+                        height: height,
+                    } });
+                args.jobLog("Detected resolution: ".concat(width, "x").concat(height));
+                args.jobLog("Maximum allowed width: ".concat(maxWidth));
+                outputNumber = width <= maxWidth ? 1 : 2;
+                args.jobLog("Resolution check ".concat(outputNumber === 1 ? 'passed' : 'failed'));
                 return [2 /*return*/, {
                         outputFileObj: args.inputFileObj,
-                        outputNumber: 1,
+                        outputNumber: outputNumber,
                         variables: newVariables,
                     }];
             case 2:
-                error_1 = _a.sent();
-                args.jobLog("Error in AB-AV1 CRF search: ".concat(error_1.message));
+                error_1 = _b.sent();
+                args.jobLog("Error in resolution check: ".concat(error_1.message));
                 return [2 /*return*/, {
                         outputFileObj: args.inputFileObj,
                         outputNumber: 2,
