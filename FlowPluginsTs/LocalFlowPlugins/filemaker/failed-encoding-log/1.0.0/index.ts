@@ -146,7 +146,6 @@ const plugin = async (args: IpluginInputArgs): Promise<IpluginOutputArgs> => {
           second: '2-digit',
           hour12: true,
         }).replace(',', ''),
-        Status: 0, // Failed status
       },
       args.deps.axios,
       args,

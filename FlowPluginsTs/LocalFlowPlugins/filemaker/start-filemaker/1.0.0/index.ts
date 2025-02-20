@@ -22,14 +22,8 @@ interface FileMakerConfig {
   recordId?: string;
 }
 
-interface ResolutionResults {
-  width: number;
-  height: number;
-}
-
 interface ExtendedVariables extends Ivariables {
   fileMaker?: FileMakerConfig;
-  resolution?: ResolutionResults;
 }
 
 interface FileMakerErrorResponse {
@@ -147,8 +141,6 @@ const plugin = async (args: IpluginInputArgs): Promise<IpluginOutputArgs> => {
 
     const { token } = authResponse.data.response;
 
-    const resolutionWidth = (args.variables as ExtendedVariables).resolution?.width || null;
-
     // Create initial record with status "in progress"
     const createResponse = await args.deps.axios({
       method: 'post',
@@ -160,8 +152,6 @@ const plugin = async (args: IpluginInputArgs): Promise<IpluginOutputArgs> => {
       data: {
         fieldData: {
           Filename: getFileName(args.inputFileObj._id),
-          Resolution: resolutionWidth,
-          Status: 2,
           OriginalSize: args.inputFileObj.file_size || 0,
         },
       },

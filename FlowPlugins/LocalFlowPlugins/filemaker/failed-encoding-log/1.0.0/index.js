@@ -184,7 +184,6 @@ var plugin = function (args) { return __awaiter(void 0, void 0, void 0, function
                             second: '2-digit',
                             hour12: true,
                         }).replace(',', ''),
-                        Status: 0, // Failed status
                     }, args.deps.axios, args)];
             case 1:
                 result = _b.sent();

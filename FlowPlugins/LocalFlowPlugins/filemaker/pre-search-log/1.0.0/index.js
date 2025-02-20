@@ -56,6 +56,7 @@ var https_1 = __importDefault(require("https"));
 var httpsAgent = new https_1.default.Agent({
     rejectUnauthorized: false,
 });
+// Helper functions for token management
 var makeFileMakerRequest = function (config, data, token, axios) { return __awaiter(void 0, void 0, void 0, function () {
     return __generator(this, function (_a) {
         switch (_a.label) {
@@ -123,6 +124,7 @@ var updateRecord = function (config, data, axios, args) { return __awaiter(void 
                 error_1 = _b.sent();
                 typedError = error_1;
                 if (!(((_a = typedError.response) === null || _a === void 0 ? void 0 : _a.status) === 401)) return [3 /*break*/, 5];
+                // Get new token and retry
                 args.jobLog('Token expired, requesting new token');
                 return [4 /*yield*/, refreshToken(config, axios)];
             case 3:
@@ -138,22 +140,22 @@ var updateRecord = function (config, data, axios, args) { return __awaiter(void 
     });
 }); };
 var details = function () { return ({
-    name: 'FileMaker Post-Encoding Log',
-    description: 'Updates FileMaker record with final encoding results',
+    name: 'Pre-Search Log',
+    description: 'Updates FileMaker record with video resolution before CRF search',
     style: {
         borderColor: 'blue',
     },
-    tags: 'database,filemaker,logging',
+    tags: 'database,filemaker,logging,resolution',
     isStartPlugin: false,
     pType: '',
     requiresVersion: '2.31.02',
-    sidebarPosition: 3,
+    sidebarPosition: 2,
     icon: 'faDatabase',
-    inputs: [], // No inputs needed as we use stored connection details
+    inputs: [],
     outputs: [
         {
             number: 1,
-            tooltip: 'Successfully updated FileMaker record',
+            tooltip: 'Successfully updated FileMaker record with resolution',
         },
         {
             number: 2,
@@ -163,32 +165,29 @@ var details = function () { return ({
 }); };
 exports.details = details;
 var plugin = function (args) { return __awaiter(void 0, void 0, void 0, function () {
-    var variables, result, updatedConfig, updatedVariables, err_1, error, errorVariables;
+    var variables, resolutionWidth, result, updatedConfig, updatedVariables, err_1, error, errorVariables;
     var _a;
     return __generator(this, function (_b) {
         switch (_b.label) {
             case 0:
                 _b.trys.push([0, 2, , 3]);
                 variables = args.variables;
-                // Check for required data
-                if (!variables.fileMaker) {
-                    throw new Error('No FileMaker configuration found. Please run initialization plugin first.');
+                // Check if we have FileMaker config from previous plugin
+                if (!variables.fileMaker || !variables.fileMaker.recordId) {
+                    throw new Error('FileMaker configuration not found in variables. Make sure Start FileMaker plugin ran first.');
                 }
+                // Check if we have resolution data
+                if (!variables.resolution || !variables.resolution.width) {
+                    throw new Error('Resolution data not found in variables. Make sure Resolution Check plugin ran first.');
+                }
+                resolutionWidth = variables.resolution.width;
                 return [4 /*yield*/, updateRecord(variables.fileMaker, {
-                        FinalSize: args.inputFileObj.file_size || 0,
-                        EndTimestamp: new Date().toLocaleString('en-US', {
-                            month: '2-digit',
-                            day: '2-digit',
-                            year: 'numeric',
-                            hour: '2-digit',
-                            minute: '2-digit',
-                            second: '2-digit',
-                            hour12: true,
-                        }).replace(',', ''),
+                        Resolution: resolutionWidth,
                     }, args.deps.axios, args)];
             case 1:
                 result = _b.sent();
-                args.jobLog('Successfully updated FileMaker record with post-encoding results');
+                args.jobLog('Successfully updated FileMaker record with resolution data');
+                args.jobLog("Resolution: ".concat(resolutionWidth));
                 updatedConfig = __assign(__assign({}, variables.fileMaker), { token: result.token });
                 updatedVariables = __assign(__assign({}, variables), { fileMaker: updatedConfig });
                 return [2 /*return*/, {
@@ -199,7 +198,7 @@ var plugin = function (args) { return __awaiter(void 0, void 0, void 0, function
             case 2:
                 err_1 = _b.sent();
                 error = err_1;
-                args.jobLog("Error updating FileMaker record: ".concat(error.message));
+                args.jobLog("Error updating FileMaker record with resolution: ".concat(error.message));
                 if ((_a = error.response) === null || _a === void 0 ? void 0 : _a.data) {
                     args.jobLog("Response data: ".concat(JSON.stringify(error.response.data)));
                 }

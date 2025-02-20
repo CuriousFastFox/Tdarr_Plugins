@@ -21,8 +21,14 @@ interface FileMakerConfig {
   recordId?: string;
 }
 
+interface ResolutionResults {
+  width: number;
+  height: number;
+}
+
 interface ExtendedVariables extends Ivariables {
   fileMaker?: FileMakerConfig;
+  resolution?: ResolutionResults;
 }
 
 interface FileMakerErrorResponse {
@@ -39,7 +45,13 @@ interface FileMakerErrorResponse {
   message: string;
 }
 
-const makeFileMakerRequest = async (config: FileMakerConfig, data: Record<string, unknown>, token: string, axios: any): Promise<void> => {
+// Helper functions for token management
+const makeFileMakerRequest = async (
+  config: FileMakerConfig, 
+  data: Record<string, unknown>, 
+  token: string, 
+  axios: any
+): Promise<void> => {
   if (!config.recordId) {
     throw new Error('No FileMaker recordId found');
   }
@@ -76,7 +88,12 @@ const refreshToken = async (config: FileMakerConfig, axios: any): Promise<string
   return authResponse.data.response.token || '';
 };
 
-const updateRecord = async (config: FileMakerConfig, data: Record<string, unknown>, axios: any, args: IpluginInputArgs): Promise<{ token: string }> => {
+const updateRecord = async (
+  config: FileMakerConfig, 
+  data: Record<string, unknown>, 
+  axios: any, 
+  args: IpluginInputArgs
+): Promise<{ token: string }> => {
   try {
     if (!config.token) {
       throw new Error('No FileMaker token found');
@@ -89,6 +106,7 @@ const updateRecord = async (config: FileMakerConfig, data: Record<string, unknow
     const typedError = error as FileMakerErrorResponse;
     // Check if token expired (401 status)
     if (typedError.response?.status === 401) {
+      // Get new token and retry
       args.jobLog('Token expired, requesting new token');
       const newToken = await refreshToken(config, axios);
       args.jobLog('Using new FileMaker token');
@@ -100,22 +118,22 @@ const updateRecord = async (config: FileMakerConfig, data: Record<string, unknow
 };
 
 const details = (): IpluginDetails => ({
-  name: 'FileMaker Post-Encoding Log',
-  description: 'Updates FileMaker record with final encoding results',
+  name: 'Pre-Search Log',
+  description: 'Updates FileMaker record with video resolution before CRF search',
   style: {
     borderColor: 'blue',
   },
-  tags: 'database,filemaker,logging',
+  tags: 'database,filemaker,logging,resolution',
   isStartPlugin: false,
   pType: '',
   requiresVersion: '2.31.02',
-  sidebarPosition: 3,
+  sidebarPosition: 2,
   icon: 'faDatabase',
-  inputs: [], // No inputs needed as we use stored connection details
+  inputs: [],
   outputs: [
     {
       number: 1,
-      tooltip: 'Successfully updated FileMaker record',
+      tooltip: 'Successfully updated FileMaker record with resolution',
     },
     {
       number: 2,
@@ -126,34 +144,34 @@ const details = (): IpluginDetails => ({
 
 const plugin = async (args: IpluginInputArgs): Promise<IpluginOutputArgs> => {
   try {
+    // Cast variables to our extended type for type safety
     const variables = args.variables as ExtendedVariables;
-
-    // Check for required data
-    if (!variables.fileMaker) {
-      throw new Error('No FileMaker configuration found. Please run initialization plugin first.');
+    
+    // Check if we have FileMaker config from previous plugin
+    if (!variables.fileMaker || !variables.fileMaker.recordId) {
+      throw new Error('FileMaker configuration not found in variables. Make sure Start FileMaker plugin ran first.');
     }
+    
+    // Check if we have resolution data
+    if (!variables.resolution || !variables.resolution.width) {
+      throw new Error('Resolution data not found in variables. Make sure Resolution Check plugin ran first.');
+    }
+    
+    const resolutionWidth = variables.resolution.width;
 
-    // Update record with post-encoding data
+    // Update record with resolution data using the token management helper
     const result = await updateRecord(
       variables.fileMaker,
       {
-        FinalSize: args.inputFileObj.file_size || 0,
-        EndTimestamp: new Date().toLocaleString('en-US', {
-          month: '2-digit',
-          day: '2-digit',
-          year: 'numeric',
-          hour: '2-digit',
-          minute: '2-digit',
-          second: '2-digit',
-          hour12: true,
-        }).replace(',', ''),
+        Resolution: resolutionWidth,
       },
       args.deps.axios,
-      args,
+      args
     );
 
-    args.jobLog('Successfully updated FileMaker record with post-encoding results');
-
+    args.jobLog('Successfully updated FileMaker record with resolution data');
+    args.jobLog(`Resolution: ${resolutionWidth}`);
+    
     // Create updated config with new token if refreshed
     const updatedConfig: FileMakerConfig = {
       ...variables.fileMaker,
@@ -173,14 +191,14 @@ const plugin = async (args: IpluginInputArgs): Promise<IpluginOutputArgs> => {
     };
   } catch (err) {
     const error = err as FileMakerErrorResponse;
-    args.jobLog(`Error updating FileMaker record: ${error.message}`);
+    args.jobLog(`Error updating FileMaker record with resolution: ${error.message}`);
     if (error.response?.data) {
       args.jobLog(`Response data: ${JSON.stringify(error.response.data)}`);
     }
-
+    
     // Maintain the ExtendedVariables type in error case as well
     const errorVariables: ExtendedVariables = args.variables as ExtendedVariables;
-
+    
     return {
       outputFileObj: args.inputFileObj,
       outputNumber: 2,

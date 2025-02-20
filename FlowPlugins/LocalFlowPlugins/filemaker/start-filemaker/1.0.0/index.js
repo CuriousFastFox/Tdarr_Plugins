@@ -134,12 +134,12 @@ var details = function () { return ({
 }); };
 exports.details = details;
 var plugin = function (args) { return __awaiter(void 0, void 0, void 0, function () {
-    var lib, inputs, serverUrl, database, layout, username, password, credentials, authResponse, token, resolutionWidth, createResponse, fileMakerConfig, updatedVariables, err_1, error;
-    var _a, _b;
-    return __generator(this, function (_c) {
-        switch (_c.label) {
+    var lib, inputs, serverUrl, database, layout, username, password, credentials, authResponse, token, createResponse, fileMakerConfig, updatedVariables, err_1, error;
+    var _a;
+    return __generator(this, function (_b) {
+        switch (_b.label) {
             case 0:
-                _c.trys.push([0, 3, , 4]);
+                _b.trys.push([0, 3, , 4]);
                 lib = require('../../../../../methods/lib')();
                 inputs = lib.loadDefaultValues(args.inputs, details);
                 serverUrl = inputs.serverUrl, database = inputs.database, layout = inputs.layout, username = inputs.username, password = inputs.password;
@@ -155,9 +155,8 @@ var plugin = function (args) { return __awaiter(void 0, void 0, void 0, function
                         httpsAgent: httpsAgent,
                     })];
             case 1:
-                authResponse = _c.sent();
+                authResponse = _b.sent();
                 token = authResponse.data.response.token;
-                resolutionWidth = ((_a = args.variables.resolution) === null || _a === void 0 ? void 0 : _a.width) || null;
                 return [4 /*yield*/, args.deps.axios({
                         method: 'post',
                         url: "".concat(serverUrl, "/fmi/data/v1/databases/").concat(database, "/layouts/").concat(layout, "/records"),
@@ -168,15 +167,13 @@ var plugin = function (args) { return __awaiter(void 0, void 0, void 0, function
                         data: {
                             fieldData: {
                                 Filename: (0, fileUtils_1.getFileName)(args.inputFileObj._id),
-                                Resolution: resolutionWidth,
-                                Status: 2,
                                 OriginalSize: args.inputFileObj.file_size || 0,
                             },
                         },
                         httpsAgent: httpsAgent,
                     })];
             case 2:
-                createResponse = _c.sent();
+                createResponse = _b.sent();
                 if (createResponse.status !== 200) {
                     throw new Error("Failed to create FileMaker record: ".concat(createResponse.statusText));
                 }
@@ -198,10 +195,10 @@ var plugin = function (args) { return __awaiter(void 0, void 0, void 0, function
                         variables: updatedVariables,
                     }];
             case 3:
-                err_1 = _c.sent();
+                err_1 = _b.sent();
                 error = err_1;
                 args.jobLog("Error initializing FileMaker record: ".concat(error.message));
-                if ((_b = error.response) === null || _b === void 0 ? void 0 : _b.data) {
+                if ((_a = error.response) === null || _a === void 0 ? void 0 : _a.data) {
                     args.jobLog("Response data: ".concat(JSON.stringify(error.response.data)));
                 }
                 return [2 /*return*/, {
