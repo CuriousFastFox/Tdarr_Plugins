@@ -19,8 +19,8 @@ interface ExtendedVariables extends Ivariables {
 }
 
 const details = (): IpluginDetails => ({
-  name: 'FFmpeg AV1 NVENC Encode',
-  description: 'Encodes video using FFmpeg with AV1 NVENC using calculated CRF value',
+  name: 'FFmpeg AV1 QSV Encode',
+  description: 'Encodes video using FFmpeg with AV1 QSV using calculated CRF value',
   style: {
     borderColor: 'orange',
   },
@@ -86,7 +86,7 @@ const plugin = async (args: IpluginInputArgs): Promise<IpluginOutputArgs> => {
     const { crf } = variables.abav1;
     const outputFilePath = `${getPluginWorkDir(args)}/${getFileName(args.inputFileObj._id)}.av1.mp4`;
 
-    args.jobLog('Starting FFmpeg AV1 NVENC encode');
+    args.jobLog('Starting FFmpeg AV1 QSV encode');
     args.jobLog(`Using CRF value: ${crf}`);
 
     const cliArgs = [
@@ -94,7 +94,7 @@ const plugin = async (args: IpluginInputArgs): Promise<IpluginOutputArgs> => {
       '-i', args.inputFileObj._id,
       '-map', '0',
       '-c:v', 'copy',
-      '-c:v:0', 'av1_nvenc',
+      '-c:v:0', 'av1_qsv',
       '-g', '300',
       '-cq', crf.toString(),
       '-pix_fmt', 'yuv420p10le',
