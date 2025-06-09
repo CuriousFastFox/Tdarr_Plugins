@@ -92,7 +92,7 @@ const plugin = async (args: IpluginInputArgs): Promise<IpluginOutputArgs> => {
     const cliArgs = [
       'crf-search',
       '-i', args.inputFileObj._id,
-      '--encoder', 'av1_nvenc',
+      '--encoder', 'av1_qsv',
       '--preset', preset,
       '--min-vmaf', minVmaf.toString(),
       '--cache', 'false',

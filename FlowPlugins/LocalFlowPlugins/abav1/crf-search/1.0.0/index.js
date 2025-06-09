@@ -124,7 +124,7 @@ var plugin = function (args) { return __awaiter(void 0, void 0, void 0, function
                 cliArgs = [
                     'crf-search',
                     '-i', args.inputFileObj._id,
-                    '--encoder', 'av1_nvenc',
+                    '--encoder', 'av1_qsv',
                     '--preset', preset,
                     '--min-vmaf', minVmaf.toString(),
                     '--cache', 'false',
