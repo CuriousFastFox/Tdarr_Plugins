@@ -40,8 +40,8 @@ exports.plugin = exports.details = void 0;
 var cliUtils_1 = require("../../../../FlowHelpers/1.0.0/cliUtils");
 var fileUtils_1 = require("../../../../FlowHelpers/1.0.0/fileUtils");
 var details = function () { return ({
-    name: 'FFmpeg AV1 NVENC Encode',
-    description: 'Encodes video using FFmpeg with AV1 NVENC using calculated CRF value',
+    name: 'FFmpeg AV1 QSV Encode',
+    description: 'Encodes video using FFmpeg with AV1 QSV using calculated CRF value',
     style: {
         borderColor: 'orange',
     },
@@ -106,14 +106,14 @@ var plugin = function (args) { return __awaiter(void 0, void 0, void 0, function
                 }
                 crf = variables.abav1.crf;
                 outputFilePath = "".concat((0, fileUtils_1.getPluginWorkDir)(args), "/").concat((0, fileUtils_1.getFileName)(args.inputFileObj._id), ".av1.mp4");
-                args.jobLog('Starting FFmpeg AV1 NVENC encode');
+                args.jobLog('Starting FFmpeg AV1 QSV encode');
                 args.jobLog("Using CRF value: ".concat(crf));
                 cliArgs = [
                     '-y',
                     '-i', args.inputFileObj._id,
                     '-map', '0',
                     '-c:v', 'copy',
-                    '-c:v:0', 'av1_nvenc',
+                    '-c:v:0', 'av1_qsv',
                     '-g', '300',
                     '-cq', crf.toString(),
                     '-pix_fmt', 'yuv420p10le',

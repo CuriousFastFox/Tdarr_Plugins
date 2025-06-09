@@ -47,10 +47,10 @@ interface FileMakerErrorResponse {
 
 // Helper functions for token management
 const makeFileMakerRequest = async (
-  config: FileMakerConfig, 
-  data: Record<string, unknown>, 
-  token: string, 
-  axios: any
+  config: FileMakerConfig,
+  data: Record<string, unknown>,
+  token: string,
+  axios: any,
 ): Promise<void> => {
   if (!config.recordId) {
     throw new Error('No FileMaker recordId found');
@@ -89,10 +89,10 @@ const refreshToken = async (config: FileMakerConfig, axios: any): Promise<string
 };
 
 const updateRecord = async (
-  config: FileMakerConfig, 
-  data: Record<string, unknown>, 
-  axios: any, 
-  args: IpluginInputArgs
+  config: FileMakerConfig,
+  data: Record<string, unknown>,
+  axios: any,
+  args: IpluginInputArgs,
 ): Promise<{ token: string }> => {
   try {
     if (!config.token) {
@@ -146,17 +146,17 @@ const plugin = async (args: IpluginInputArgs): Promise<IpluginOutputArgs> => {
   try {
     // Cast variables to our extended type for type safety
     const variables = args.variables as ExtendedVariables;
-    
+
     // Check if we have FileMaker config from previous plugin
     if (!variables.fileMaker || !variables.fileMaker.recordId) {
       throw new Error('FileMaker configuration not found in variables. Make sure Start FileMaker plugin ran first.');
     }
-    
+
     // Check if we have resolution data
     if (!variables.resolution || !variables.resolution.width) {
       throw new Error('Resolution data not found in variables. Make sure Resolution Check plugin ran first.');
     }
-    
+
     const resolutionWidth = variables.resolution.width;
 
     // Update record with resolution data using the token management helper
@@ -166,12 +166,12 @@ const plugin = async (args: IpluginInputArgs): Promise<IpluginOutputArgs> => {
         Resolution: resolutionWidth,
       },
       args.deps.axios,
-      args
+      args,
     );
 
     args.jobLog('Successfully updated FileMaker record with resolution data');
     args.jobLog(`Resolution: ${resolutionWidth}`);
-    
+
     // Create updated config with new token if refreshed
     const updatedConfig: FileMakerConfig = {
       ...variables.fileMaker,
@@ -195,10 +195,10 @@ const plugin = async (args: IpluginInputArgs): Promise<IpluginOutputArgs> => {
     if (error.response?.data) {
       args.jobLog(`Response data: ${JSON.stringify(error.response.data)}`);
     }
-    
+
     // Maintain the ExtendedVariables type in error case as well
     const errorVariables: ExtendedVariables = args.variables as ExtendedVariables;
-    
+
     return {
       outputFileObj: args.inputFileObj,
       outputNumber: 2,
