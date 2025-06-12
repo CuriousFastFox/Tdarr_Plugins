@@ -107,7 +107,7 @@ var details = function () { return ({
 }); };
 exports.details = details;
 var plugin = function (args) { return __awaiter(void 0, void 0, void 0, function () {
-    var lib, inputs, minVmaf, preset, abav1Path, cliArgs, cli, process_1, allOutput_1, lines, lastLine, i, regex, match, crf, vmaf, size, duration, newVariables, error_1;
+    var lib, inputs, minVmaf, preset, abav1Path, cliArgs, cli, process_1, allOutput_1, lines, lastLine, i, regex, match, crf, vmaf, sizeValue, sizeUnit, duration, sizeInMiB, newVariables, error_1;
     return __generator(this, function (_a) {
         switch (_a.label) {
             case 0:
@@ -168,16 +168,20 @@ var plugin = function (args) { return __awaiter(void 0, void 0, void 0, function
                 if (!lastLine) {
                     throw new Error('Could not find CRF search result in output');
                 }
-                regex = /crf (\d+) VMAF ([\d.]+) predicted video stream size ([\d.]+) MiB \((\d+)%\) taking (\d+) (minutes|seconds)/;
+                regex = /crf (\d+) VMAF ([\d.]+) predicted video stream size ([\d.]+) (MiB|GiB) \((\d+)%\) taking (\d+) (minutes|seconds)/;
                 match = lastLine.match(regex);
                 if (!match) {
                     throw new Error("Could not parse AB-AV1 output: ".concat(lastLine));
                 }
-                crf = match[1], vmaf = match[2], size = match[3], duration = match[5];
+                crf = match[1], vmaf = match[2], sizeValue = match[3], sizeUnit = match[4], duration = match[6];
+                sizeInMiB = parseFloat(sizeValue);
+                if (sizeUnit === 'GiB') {
+                    sizeInMiB = sizeInMiB * 1024; // Convert GiB to MiB
+                }
                 newVariables = __assign(__assign({}, args.variables), { abav1: {
                         crf: parseInt(crf, 10),
                         vmaf: parseFloat(vmaf),
-                        size: parseFloat(size),
+                        size: sizeInMiB, // Always stored as MiB
                         duration: parseInt(duration, 10),
                     }, ffmpegCommand: args.variables.ffmpegCommand, flowFailed: args.variables.flowFailed });
                 args.jobLog('AB-AV1 CRF search completed successfully');
