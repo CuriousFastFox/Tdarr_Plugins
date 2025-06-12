@@ -146,8 +146,8 @@ const plugin = async (args: IpluginInputArgs): Promise<IpluginOutputArgs> => {
       throw new Error('Could not find CRF search result in output');
     }
 
-    // Parse the final output line using regex
-    const regex = /crf (\d+) VMAF ([\d.]+) predicted video stream size ([\d.]+) MiB \((\d+)%\) taking (\d+) (minutes|seconds)/;
+    // Parse the final output line using regex - now handles both MiB and GiB
+    const regex = /crf (\d+) VMAF ([\d.]+) predicted video stream size ([\d.]+) (MiB|GiB) \((\d+)%\) taking (\d+) (minutes|seconds)/;
     const match = lastLine.match(regex);
 
     if (!match) {
@@ -155,7 +155,13 @@ const plugin = async (args: IpluginInputArgs): Promise<IpluginOutputArgs> => {
     }
 
     // Extract values
-    const [, crf, vmaf, size, , duration] = match;
+    const [, crf, vmaf, sizeValue, sizeUnit, , duration] = match;
+
+    // Convert size to MiB for consistency
+    let sizeInMiB = parseFloat(sizeValue);
+    if (sizeUnit === 'GiB') {
+      sizeInMiB = sizeInMiB * 1024; // Convert GiB to MiB
+    }
 
     // Store results in variables
     const newVariables: ExtendedVariables = {
@@ -163,7 +169,7 @@ const plugin = async (args: IpluginInputArgs): Promise<IpluginOutputArgs> => {
       abav1: {
         crf: parseInt(crf, 10),
         vmaf: parseFloat(vmaf),
-        size: parseFloat(size),
+        size: sizeInMiB, // Always stored as MiB
         duration: parseInt(duration, 10),
       },
       ffmpegCommand: args.variables.ffmpegCommand,
